@@ -90,4 +90,4 @@ The problem was solved using an algorithm with the following complexities:
 - **Memory Complexity (Big-O notation):** O(n)
   - The memory usage is proportional to the maximum frame value across all files.
 
-  While the memory complexity could potentially be reduced to O(1) by parsing all files in lockstep, this approach would introduce substantially increased code complexity. The decision was made to prioritize code simplicity, but it's acknowledged that in highly memory-constrained systems, an O(1) solution could be explored.
+  While the memory complexity could potentially be reduced to O(m) by parsing all files in lockstep, this approach would introduce substantially increased code complexity. The decision was made to prioritize code simplicity, but it's acknowledged that in highly memory-constrained systems, an O(m) solution could be explored.
