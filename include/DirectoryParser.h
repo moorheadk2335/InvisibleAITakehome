@@ -22,6 +22,7 @@ private:
     Result result;
 
     std::pair<int, bool> parseLine(std::string line);
+    int getTotalFrames(const std::filesystem::directory_entry &entry);
 };
 
 #endif //FILE_PARSER_H

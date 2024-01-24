@@ -26,14 +26,24 @@ bool DirectoryParser::parse()
         return false;
     }
 
-    vector<FrameInfo> frameInfo;
+    int frameCount = 0;
 
+    // Preprocess our files to determine the overall frame count
+    // We're only reading the last line of each file, so this should be fast
+    for (const auto &entry : filesystem::directory_iterator(path)) {
+        frameCount = max(frameCount, getTotalFrames(entry));
+    }
+
+    // Assume zero based array, so frameCount + 1 for total items
+    vector<FrameInfo> frameInfo(frameCount + 1);
+
+    // Parse each file
     for (const auto &entry : filesystem::directory_iterator(path)) {
         // Skip anything that is not a regular file
         if (!entry.is_regular_file()) continue;
 
-        std::ifstream input(entry.path());
-
+        // Parse each line of the file
+        ifstream input(entry.path());
         for (string line; getline(input, line); ) {
             // Ensure the line contains data
             if (line.length() == 0) continue;
@@ -41,13 +51,10 @@ bool DirectoryParser::parse()
             // Parse the given line
             auto[frameNumber, vote] = parseLine(line);
 
-            // Grow our vector containing the current frame counts as needed
-            // This code will be slow the first time through a given file as we will be continually resizing,
-            // or if the frame numbers are drastically off between files,
-            // we could preprocess the files to determine the highest frame number
-            // to preallcoate the vector to the correct sizes as one way to avoid this
-            // We could also use a map with the frame number as the key to avoid needing to resize
-            // This assumes the frame count is zero based
+            // If we failed to parse the line, don't try to set the frame count from this
+            if (frameNumber == -1) continue;
+
+            // Grow our array if needed, this shouldn't happend thanks to the preprocessing
             if (frameInfo.size() < (frameNumber + 1)) {
                 frameInfo.resize(frameNumber + 1);
             }
@@ -59,6 +66,7 @@ bool DirectoryParser::parse()
 
     // Finally, tally the voting information
     for (auto info : frameInfo) {
+        // If no cameras voted on this frame, skip it
         if (info.totalVotes == 0) continue;
 
         if (info.positiveVotes > info.totalVotes / 2) result.majority++;
@@ -81,14 +89,41 @@ void DirectoryParser::setPath(std::filesystem::path newPath)
     path = newPath;
 }
 
-
 pair<int, bool> DirectoryParser::parseLine(string line)
 {
     // Example line: 4, true
     string delimiter = ", ";
     size_t index = line.find(delimiter);
+    if (index == string::npos) {
+        cout << "Failed to parse line: " << line << endl;
+        return pair<int, bool>(-1, false);
+    }
     int frameNumber = stoi(line.substr(0,index));
     bool vote = line.substr(index + delimiter.length(), line.length()) == "true";
     return pair<int, bool>(frameNumber, vote);
 }
 
+int DirectoryParser::getTotalFrames(const filesystem::directory_entry &entry)
+{
+    // Skip anything that is not a regular file, or if the file is empty
+    if (!entry.is_regular_file() || filesystem::file_size(entry) == 0) return -1;
+
+    ifstream input(entry.path(), ios::ate);
+    streampos totalSize = input.tellg();
+
+    // Seek backwards from the end of the file until we find the first newline character
+    int searchIndex;
+    // Set to 2 to skip the final new line
+    for (searchIndex = 2; searchIndex <= totalSize; searchIndex++) {
+        input.seekg(-searchIndex, ios::end);
+        if (input.peek() == '\n') break;
+    }
+
+    // Create a buffer big enough to hold the last line
+    int lastLineLength = totalSize - input.tellg();
+    vector<char> buffer(lastLineLength);
+    input.read(&buffer[0], lastLineLength);
+
+    auto [frameNumber, vote] = parseLine(string(buffer.begin(), buffer.end()));
+    return frameNumber;
+}
